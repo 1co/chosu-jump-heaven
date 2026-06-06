@@ -1,20 +1,22 @@
-# CHOSU JUMP HEAVEN / ちょすのジャンプ天国
+# CHOSU JUMP HEAVEN / ちょすのジャンプ天国 🐻🥟
 
-ブラウザで遊べる横スクロールジャンプゲーム 🐻🥟
+「ちょす」を操作して障害物をよけ、にくまん（肉まん）を集める、ブラウザで遊べる横スクロールジャンプゲームです。
 
-▶ Play: `https://<あなたのGitHubユーザー名>.github.io/chosu-jump-heaven/`
+## ▶ あそぶ
 
----
+**https://1co.github.io/chosu-jump-heaven/**
 
-このリポジトリは**公開（配信）用**です。中身は単体の `index.html` のみ（制作用のソースは別の非公開リポジトリで管理）。
+スマートフォン・PC どちらでも遊べます。スマホはホーム画面に追加するとアプリのように起動できます。
 
-## 含まれるファイル
-- `index.html` … ゲーム本体（これだけで動作）
-- `favicon.png` … ファビコン（**別途追加してください**：32×32px 推奨）
-- `apple-touch-icon.png` … iOSホーム画面アイコン（**別途追加してください**：180×180px 推奨）
+## あそびかた
 
-## 公開手順（GitHub Pages）
-1. このリポジトリを **Public** で GitHub に作成
-2. `index.html`（＋上記アイコン）を置く
-3. Settings → Pages → Source: *Deploy from a branch* → Branch: `main` / `/(root)` → Save
-4. 数分後に上記URLで公開
+- **ジャンプ**：スペースキー / ↑キー / 画面タップ
+- サボテン・岩・木などの障害物をよけながら、**にくまん**を集めてハイスコアを目指そう！
+- ハイスコアはブラウザに自動保存されます。
+
+## クレジット
+
+© 2026 1co (ichishiki). All rights reserved.
+
+ゲーム本体、ならびにキャラクター「ちょす」「にくまん」は 1co (ichishiki) のオリジナル作品です。
+無断での複製・再配布・改変・転載・商用利用を禁止します（詳細は [NOTICE](NOTICE) を参照）。

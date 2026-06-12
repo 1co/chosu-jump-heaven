@@ -3,9 +3,15 @@
   CHOSU JUMP HEAVEN / ちょすのジャンプ天国
   © 2026 1co (ichishiki). All rights reserved. / 無断複製・再配布・転載を禁止します。
   Characters "Chosu/ちょす" and "Nikuman/にくまん" are original works by 1co (ichishiki).
+  Version 1.0.2   (2026-06-13)  - Fix v1.0.1 regression: the added window touchstart
+                                  fallback double-fired with pointerdown on iOS, so taps
+                                  on the lang / retry / title buttons leaked to the window
+                                  jump handler (game started instead). Reverted to
+                                  pointerdown-only (it fires fine in the itch iframe);
+                                  kept touch-action:none, which was the real tap fix.
   Version 1.0.1   (2026-06-13)  - Mobile tap fix: touch-action:none on body/canvas +
-                                  touchstart fallback (debounced) so taps register inside
-                                  the itch.io iframe (esp. iOS Safari).
+                                  touchstart fallback (debounced). NOTE: the touchstart
+                                  fallback caused a button double-fire on iOS; see 1.0.2.
   Version 1.0.0   (2026-06-12)  - First complete release.
   Version 0.12.1  (2026-06-11)  - Updated title logo (title.svg); HUD digits switched to
                                   Silkscreen font for legibility (labels stay Pixelify).
@@ -436,7 +442,7 @@
       <img id="titleChosu" alt="ちょす">
       <img id="titleNikuman" alt="にくまん">
       <div id="langToggle" class="lang" aria-label="language"><button data-lang="ja">JA</button><button data-lang="en">EN</button></div>
-      <div class="version"><span class="v">v</span>1.0.1</div>
+      <div class="version"><span class="v">v</span>1.0.2</div>
       <div class="copyright">© 2026 ICHISHIKI. All rights reserved.</div>
     </div>
 
@@ -838,34 +844,15 @@
       e.preventDefault(); unlockAudio(); onJumpInput();
     }
   });
-  // Tap to jump. Some mobile-in-iframe setups (itch.io on iOS) don't deliver
-  // pointer events reliably, so we also listen for touchstart and debounce so a
-  // single tap that fires both pointer + touch doesn't trigger two jumps.
-  let lastTapT = 0;
-  function tapJump(e) {
-    const now = e.timeStamp || Date.now();
-    if (now - lastTapT < 100) return;
-    lastTapT = now;
+  // Tap to jump. Pointer events cover mouse + touch + pen and fire reliably
+  // inside the itch.io iframe (iOS Safari included). touch-action:none on
+  // body/canvas keeps the browser from stealing the tap as a scroll/zoom gesture.
+  window.addEventListener("pointerdown", (e) => {
     unlockAudio();
     if (state === STATE.OVER) return;
-    if (e.cancelable) e.preventDefault();
-    onJumpInput();
-  }
-  window.addEventListener("pointerdown", tapJump, { passive: false });
-  window.addEventListener("touchstart", tapJump, { passive: false });
-  function btnTap(el, fn) {
-    let bt = 0;
-    const h = (e) => {
-      const now = e.timeStamp || Date.now();
-      if (now - bt < 100) return;
-      bt = now;
-      if (e.cancelable) e.preventDefault();
-      e.stopPropagation();
-      fn();
-    };
-    el.addEventListener("pointerdown", h);
-    el.addEventListener("touchstart", h, { passive: false });
-  }
+    e.preventDefault(); onJumpInput();
+  }, { passive: false });
+  function btnTap(el, fn) { el.addEventListener("pointerdown", (e)=>{ e.preventDefault(); e.stopPropagation(); fn(); }); }
   btnTap(elBtnRestart, restartGame);
   btnTap(elBtnTitle, goToTitle);
 

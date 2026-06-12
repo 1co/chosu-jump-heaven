@@ -3,6 +3,7 @@
   CHOSU JUMP HEAVEN / ちょすのジャンプ天国
   © 2026 1co (ichishiki). All rights reserved. / 無断複製・再配布・転載を禁止します。
   Characters "Chosu/ちょす" and "Nikuman/にくまん" are original works by 1co (ichishiki).
+  Version 1.0.0   (2026-06-12)  - First complete release.
   Version 0.12.1  (2026-06-11)  - Updated title logo (title.svg); HUD digits switched to
                                   Silkscreen font for legibility (labels stay Pixelify).
   Version 0.12.0  (2026-06-09)  - English / Japanese language toggle (JA|EN segment by
@@ -257,7 +258,7 @@
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
-    bottom: 10px;
+    bottom: 26px;
     font-family: 'Silkscreen', sans-serif;
     font-weight: 400;
     font-size: clamp(10px, 2vw, 13px);
@@ -266,6 +267,20 @@
     pointer-events: none;
   }
   .version .v { font-family: 'Pixelify Sans', sans-serif; font-weight: 700; }
+
+  .copyright {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 10px;
+    font-family: 'Pixelify Sans', sans-serif;
+    font-weight: 400;
+    font-size: clamp(8px, 1.6vw, 11px);
+    white-space: nowrap;
+    color: var(--brown);
+    opacity: .4;
+    pointer-events: none;
+  }
 
   /* title-screen chosu shown in front of the instructions */
   #titleChosu {
@@ -338,6 +353,8 @@
   #hud .hi { color: #d98a2b; }
   /* fixed-width digit cells so numbers don't jitter as values change */
   #hud .d { display: inline-block; width: 0.64em; text-align: center; font-family: 'Silkscreen', sans-serif; font-weight: 400; }
+  /* Silkscreen's "1" sits left in its advance, leaving a gap on the right; nudge it back */
+  #hud .d.one { transform: translateX(0.07em); }
   .nikuman-count { display: inline-flex; align-items: center; gap: 3px; }
   .nikuman-count .x { position: relative; top: 2px; }
   .nikuman-count img { height: 1.5em; width: auto; vertical-align: middle; }
@@ -377,7 +394,6 @@
     transition: opacity .35s ease;
   }
   #loading.hidden { opacity: 0; pointer-events: none; }
-  #loadingNikuman { width: 72px; height: auto; transform-origin: center center; animation: ponyon 1.6s ease-in-out infinite; }
   #loading .loading-text {
     font-family: 'Pixelify Sans', sans-serif;
     color: var(--cream);
@@ -414,7 +430,8 @@
       <img id="titleChosu" alt="ちょす">
       <img id="titleNikuman" alt="にくまん">
       <div id="langToggle" class="lang" aria-label="language"><button data-lang="ja">JA</button><button data-lang="en">EN</button></div>
-      <div class="version"><span class="v">v</span>0.12.1</div>
+      <div class="version"><span class="v">v</span>1.0.0</div>
+      <div class="copyright">© 2026 ICHISHIKI. All rights reserved.</div>
     </div>
 
     <!-- Game over screen -->
@@ -438,7 +455,6 @@
 
 <!-- loading screen: covers the layout flash until assets/fonts are ready -->
 <div id="loading">
-  <img id="loadingNikuman" alt="">
   <div class="loading-text">Loading…</div>
 </div>
 
@@ -596,7 +612,6 @@
 
   // ===== Loading screen (hide once images + fonts are ready) =====
   const elLoading = document.getElementById("loading");
-  document.getElementById("loadingNikuman").src = ASSETS["nikuman00"];
   let fontsReady = !(document.fonts && document.fonts.ready);
   let logosReady = 0;
   [document.getElementById("logoTitle"), document.getElementById("logoGameover")].forEach((im) => {
@@ -828,7 +843,7 @@
 
   // render a number as fixed-width digit cells so the HUD doesn't jitter
   function digits(n) {
-    return String(n).split("").map(c => '<span class="d">' + c + "</span>").join("");
+    return String(n).split("").map(c => '<span class="d' + (c === "1" ? " one" : "") + '">' + c + "</span>").join("");
   }
   function updateHUD() {
     elScore.innerHTML = digits(Math.floor(score));

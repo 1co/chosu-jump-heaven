@@ -3,6 +3,10 @@
   CHOSU JUMP HEAVEN / ちょすのジャンプ天国
   © 2026 1co (ichishiki). All rights reserved. / 無断複製・再配布・転載を禁止します。
   Characters "Chosu/ちょす" and "Nikuman/にくまん" are original works by 1co (ichishiki).
+  Version 1.0.4   (2026-06-13)  - Tap anywhere again: v1.0.3 moved the jump listener to
+                                  #stage, which lost taps on the letterbox margins itch
+                                  adds. Moved it to #wrap (fills the viewport) so the whole
+                                  screen jumps, as it did pre-itch.
   Version 1.0.3   (2026-06-13)  - Real mobile-tap fix: iOS Safari only bubbles taps to
                                   window for "clickable" elements, so the window jump
                                   listener never fired on the (non-clickable) canvas /
@@ -97,6 +101,7 @@
     width: 100%;
     height: 100%;
     padding: var(--pad);
+    cursor: pointer;   /* whole viewport taps to jump; iOS only delivers taps to "clickable" elements */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -115,7 +120,6 @@
     overflow: hidden;
     box-shadow: 0 10px 0 rgba(0,0,0,.25), 0 0 0 6px var(--cream), 0 0 0 10px var(--brown);
     background: linear-gradient(180deg, var(--sky-top), var(--sky-bot));
-    cursor: pointer;   /* iOS Safari only delivers taps to "clickable" elements */
   }
   /* SP: a little taller (≈8:7) */
   @media (max-width: 700px) {
@@ -449,7 +453,7 @@
       <img id="titleChosu" alt="ちょす">
       <img id="titleNikuman" alt="にくまん">
       <div id="langToggle" class="lang" aria-label="language"><button data-lang="ja">JA</button><button data-lang="en">EN</button></div>
-      <div class="version"><span class="v">v</span>1.0.3</div>
+      <div class="version"><span class="v">v</span>1.0.4</div>
       <div class="copyright">© 2026 ICHISHIKI. All rights reserved.</div>
     </div>
 
@@ -851,14 +855,14 @@
       e.preventDefault(); unlockAudio(); onJumpInput();
     }
   });
-  // Tap to jump. iOS Safari only bubbles taps up to window/document for
-  // "clickable" elements; the canvas/overlays aren't, so a window-level listener
-  // never saw game-area taps inside the itch.io iframe (mute/lang buttons worked
-  // because they have their own element listeners). So we listen on #stage itself
-  // (made clickable via cursor:pointer). Buttons inside stopPropagation, so
-  // tapping them doesn't trigger a jump. touch-action:none keeps the browser
-  // from stealing the tap as a scroll/zoom gesture.
-  document.getElementById("stage").addEventListener("pointerdown", (e) => {
+  // Tap anywhere to jump. iOS Safari only bubbles taps up to window/document for
+  // "clickable" elements; the page/canvas/overlays aren't, so a window-level
+  // listener never saw taps inside the itch.io iframe (mute/lang buttons worked
+  // because they have their own element listeners). So we listen on #wrap, which
+  // fills the whole viewport (incl. the letterbox margins itch adds), and make it
+  // clickable via cursor:pointer. Buttons inside stopPropagation, so tapping them
+  // doesn't jump. touch-action:none stops the browser stealing the tap as a gesture.
+  document.getElementById("wrap").addEventListener("pointerdown", (e) => {
     unlockAudio();
     if (state === STATE.OVER) return;
     e.preventDefault(); onJumpInput();

@@ -3,6 +3,13 @@
   CHOSU JUMP HEAVEN / ちょすのジャンプ天国
   © 2026 1co (ichishiki). All rights reserved. / 無断複製・再配布・転載を禁止します。
   Characters "Chosu/ちょす" and "Nikuman/にくまん" are original works by 1co (ichishiki).
+  Version 1.2.0   (2026-06-14)  - Expert easter egg: once the score passes 10000, the run
+                                  speed stops climbing steadily and instead re-rolls a random
+                                  target every 1.5-2.5s within the normal 360-760 range,
+                                  easing toward it (obstacle spacing + jump timing stay fair).
+                                  Triggers a one-shot cue: rising arpeggio SFX + a brief
+                                  white screen flash + a "RANDOM SPEED!?" banner (Pixelify
+                                  Sans, shown on both languages). Lasts the rest of the run.
   Version 1.1.0   (2026-06-14)  - Share-to-X button on the game-over screen: a small X-logo
                                   icon button in the bottom-right corner (mirrors the mute
                                   button), kept out of the main button row so it never wraps
@@ -384,6 +391,46 @@
   .share-btn:active { transform: translateY(2px); box-shadow: 0 0 0 var(--brown); }
   .key-hint { font-size: clamp(11px, 2.4vw, 14px); color: var(--brown); opacity: .8; font-weight: 500; }
 
+  /* ===== random-speed trigger cues (score >= RANDOM_SPEED_SCORE) ===== */
+  /* (2) brief full-screen flash */
+  #speedFlash {
+    position: absolute; inset: 0;
+    z-index: 8;
+    background: #fff;
+    opacity: 0;
+    pointer-events: none;
+  }
+  #speedFlash.flash { animation: speedFlash .5s ease-out; }
+  @keyframes speedFlash { 0% { opacity: .85; } 100% { opacity: 0; } }
+  /* (3) HUD "!?" banner */
+  #cueBanner {
+    position: absolute;
+    top: 34%; left: 50%;
+    transform: translate(-50%, -50%) scale(.6);
+    z-index: 9;
+    font-family: 'Pixelify Sans', sans-serif;
+    font-weight: 700;
+    font-size: clamp(20px, 5.5vw, 40px);
+    color: var(--brown);
+    background: var(--yellow);
+    border: 3px solid var(--brown);
+    border-radius: 14px;
+    padding: 6px 20px;
+    box-shadow: 0 4px 0 rgba(65,39,33,.3);
+    white-space: nowrap;
+    max-width: 90%;
+    opacity: 0;
+    pointer-events: none;
+  }
+  #cueBanner.show { animation: cueBanner 1.4s ease-out; }
+  @keyframes cueBanner {
+    0%   { opacity: 0; transform: translate(-50%,-50%) scale(.6); }
+    14%  { opacity: 1; transform: translate(-50%,-50%) scale(1.12); }
+    28%  { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+    78%  { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%,-50%) scale(1); }
+  }
+
   /* ---- HUD ---- */
   #hud {
     position: absolute;
@@ -481,7 +528,7 @@
       <img id="titleChosu" alt="ちょす">
       <img id="titleNikuman" alt="にくまん">
       <div id="langToggle" class="lang" aria-label="language"><button data-lang="ja">JA</button><button data-lang="en">EN</button></div>
-      <div class="version"><span class="v">v</span>1.1.0</div>
+      <div class="version"><span class="v">v</span>1.2.0</div>
       <div class="copyright">© 2026 ICHISHIKI. All rights reserved.</div>
     </div>
 
@@ -502,6 +549,10 @@
     </div>
 
     <button id="muteBtn" class="mute" aria-label="サウンド切替"><i class="fa-solid fa-volume-high"></i></button>
+
+    <!-- random-speed trigger cues (fire once when score crosses RANDOM_SPEED_SCORE) -->
+    <div id="speedFlash"></div>
+    <div id="cueBanner"></div>
   </div>
 </div>
 
@@ -544,6 +595,8 @@
   const elTitleNikuman = document.getElementById("titleNikuman");
   const elTitleChosu   = document.getElementById("titleChosu");
   const elMute         = document.getElementById("muteBtn");
+  const elSpeedFlash   = document.getElementById("speedFlash");
+  const elCueBanner    = document.getElementById("cueBanner");
   document.getElementById("logoTitle").src    = ASSETS["logo/title.svg"];
   document.getElementById("logoGameover").src  = ASSETS["logo/gameover.svg"];
   elHudNikuman.src     = ASSETS["nikuman00"];
@@ -603,6 +656,10 @@
                           tone({ type: "square", f0: 1020, dur: 0.13, vol: 0.4, delay: 0.075 }); };
   const sfxOver = () => { tone({ type: "sawtooth", f0: 500, f1: 130, dur: 0.5, vol: 0.45 });
                           tone({ type: "square", f0: 300, f1: 90, dur: 0.55, vol: 0.2, delay: 0.04 }); };
+  // (1) random-speed trigger cue — rising 3-step arpeggio
+  const sfxWarp = () => { tone({ type: "square",   f0: 300, f1: 760,  dur: 0.16, vol: 0.4 });
+                          tone({ type: "square",   f0: 480, f1: 1100, dur: 0.18, vol: 0.4, delay: 0.11 });
+                          tone({ type: "triangle", f0: 680, f1: 1500, dur: 0.22, vol: 0.45, delay: 0.23 }); };
 
   function setMuted(m) {
     muted = m;
@@ -696,6 +753,10 @@
   const HISCORE_KEY = "chosu_jump_heaven_hiscore";
 
   const SPEED_START = 360, SPEED_MAX = 760, SPEED_GROW = 9;
+  // ===== Random-speed mode (kicks in past a score threshold, lasts the rest of the run) =====
+  const RANDOM_SPEED_SCORE = 10000;        // expert-only rare easter egg: speed goes random past this score
+  const SPEED_PICK_MIN = 1.5, SPEED_PICK_MAX = 2.5; // seconds between target re-rolls
+  const SPEED_LERP = 3;                    // how quickly speed eases toward each new target
 
   // ground tiles (native 1024x512, surface partway down). Scaled down so more of
   // the texture/pattern shows.
@@ -755,6 +816,7 @@
 
   let speed = SPEED_START;
   let distance = 0, score = 0, nikumanCount = 0, hiscore = 0;
+  let randomSpeed = false, speedTarget = 0, speedPickTimer = 0;
 
   const chosu = { y: 0, vy: 0, onGround: true };
   let obstacles = [], nikumans = [], clouds = [], grass = [], popups = [];
@@ -815,7 +877,24 @@
     spawnTimer = rand(0.7, 1.1);
     nikumanTimer = rand(1.2, 2.2);
     runFrame = 0; runFrameTimer = 0;
+    randomSpeed = false; speedTarget = 0; speedPickTimer = 0;
     updateHUD();
+  }
+
+  // ===== Random-speed trigger + cues =====
+  function triggerRandomSpeed() {
+    randomSpeed = true;
+    speedTarget = speed;   // ease away from the current speed
+    speedPickTimer = 0;    // re-roll a target on the next frame
+    fireSpeedCues();
+  }
+  function fireSpeedCues() {
+    sfxWarp();                                                            // (1) sound
+    elSpeedFlash.classList.remove("flash"); void elSpeedFlash.offsetWidth; // restart anim
+    elSpeedFlash.classList.add("flash");                                  // (2) flash
+    elCueBanner.textContent = "RANDOM SPEED!?"; // English on both languages (Pixelify Sans suits it)
+    elCueBanner.classList.remove("show"); void elCueBanner.offsetWidth;
+    elCueBanner.classList.add("show");                                    // (3) "!?" banner
   }
 
   // ===== Biome / spawning =====
@@ -960,7 +1039,19 @@
       return;
     }
 
-    speed = Math.min(SPEED_MAX*speedScale, speed + SPEED_GROW*speedScale*dt);
+    if (!randomSpeed && score >= RANDOM_SPEED_SCORE) triggerRandomSpeed();
+    if (randomSpeed) {
+      // re-roll a target speed every so often, then ease toward it (range stays
+      // 360–760 so obstacle spacing + jump timing remain fair)
+      speedPickTimer -= dt;
+      if (speedPickTimer <= 0) {
+        speedTarget = rand(SPEED_START, SPEED_MAX) * speedScale;
+        speedPickTimer = rand(SPEED_PICK_MIN, SPEED_PICK_MAX);
+      }
+      speed += (speedTarget - speed) * Math.min(1, dt * SPEED_LERP);
+    } else {
+      speed = Math.min(SPEED_MAX*speedScale, speed + SPEED_GROW*speedScale*dt);
+    }
     distance += speed * dt;
     score += speed * dt * 0.02;
     updateHUD();

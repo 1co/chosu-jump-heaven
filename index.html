@@ -3,6 +3,13 @@
   CHOSU JUMP HEAVEN / ちょすのジャンプ天国
   © 2026 1co (ichishiki). All rights reserved. / 無断複製・再配布・転載を禁止します。
   Characters "Chosu/ちょす" and "Nikuman/にくまん" are original works by 1co (ichishiki).
+  Version 1.1.0   (2026-06-14)  - Share-to-X button on the game-over screen: a small X-logo
+                                  icon button in the bottom-right corner (mirrors the mute
+                                  button), kept out of the main button row so it never wraps
+                                  / breaks the layout on mobile. Posts your score + Nikuman
+                                  count via an intent URL, with both #ちょすのジャンプ天国 and
+                                  #CHOSUJUMPHEAVEN tags and a link back to the OGP page.
+                                  JA/EN post text.
   Version 1.0.4   (2026-06-13)  - Tap anywhere again: v1.0.3 moved the jump listener to
                                   #stage, which lost taps on the letterbox margins itch
                                   adds. Moved it to #wrap (fills the viewport) so the whole
@@ -354,6 +361,27 @@
   }
   .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--brown); }
   .btn.secondary { background: var(--mint); }
+  /* share to X — small icon button, mirrors the mute button (bottom-right of the game-over screen) */
+  .share-btn {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    z-index: 7;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    color: var(--cream);
+    background: #1c1c1e;
+    border: 2px solid var(--brown);
+    border-radius: 8px;
+    box-shadow: 0 2px 0 var(--brown);
+    cursor: pointer;
+    pointer-events: auto;
+  }
+  .share-btn:active { transform: translateY(2px); box-shadow: 0 0 0 var(--brown); }
   .key-hint { font-size: clamp(11px, 2.4vw, 14px); color: var(--brown); opacity: .8; font-weight: 500; }
 
   /* ---- HUD ---- */
@@ -453,7 +481,7 @@
       <img id="titleChosu" alt="ちょす">
       <img id="titleNikuman" alt="にくまん">
       <div id="langToggle" class="lang" aria-label="language"><button data-lang="ja">JA</button><button data-lang="en">EN</button></div>
-      <div class="version"><span class="v">v</span>1.0.4</div>
+      <div class="version"><span class="v">v</span>1.1.0</div>
       <div class="copyright">© 2026 ICHISHIKI. All rights reserved.</div>
     </div>
 
@@ -468,8 +496,9 @@
       </div>
       <div class="btnrow">
         <button class="btn" id="btnRestart"><i class="fa-solid fa-rotate-right"></i> <span data-i18n="retry">もう一度</span></button>
-        <button class="btn secondary" id="btnTitle"><i class="fa-solid fa-house"></i> <span data-i18n="titleBtn">タイトルに戻る</span></button>
+        <button class="btn secondary" id="btnTitle"><i class="fa-solid fa-house"></i> <span data-i18n="titleBtn">タイトル</span></button>
       </div>
+      <button id="btnShare" class="share-btn" aria-label="Share on X" title="Share"><i class="fa-brands fa-x-twitter"></i></button>
     </div>
 
     <button id="muteBtn" class="mute" aria-label="サウンド切替"><i class="fa-solid fa-volume-high"></i></button>
@@ -511,6 +540,7 @@
   const elHudNikuman   = document.getElementById("hudNikuman");
   const elBtnRestart   = document.getElementById("btnRestart");
   const elBtnTitle     = document.getElementById("btnTitle");
+  const elBtnShare     = document.getElementById("btnShare");
   const elTitleNikuman = document.getElementById("titleNikuman");
   const elTitleChosu   = document.getElementById("titleChosu");
   const elMute         = document.getElementById("muteBtn");
@@ -593,7 +623,7 @@
   const I18N = {
     ja: { subtitle: "ちょすのジャンプ天国", hintTail: " / タップでジャンプ",
           hintSub: "にくまんを集めて、障害物をよけよう！", start: "おして スタート",
-          retry: "もう一度", titleBtn: "タイトルに戻る", scoreLabel: "スコア",
+          retry: "もう一度", titleBtn: "タイトル", scoreLabel: "スコア",
           rotate: "たてむきにして<br>あそんでね" },
     en: { subtitle: "Jump & collect Nikuman!", hintTail: " / Tap to jump",
           hintSub: "Collect Nikuman and dodge obstacles!", start: "Press to start",
@@ -607,7 +637,7 @@
   }
   const langBtns = Array.prototype.slice.call(document.querySelectorAll("#langToggle button"));
   // over-panel snapshot so the texts can be rebuilt on language change
-  let overNik = 0, overNew = false;
+  let overNik = 0, overNew = false, overScore = 0;
   function refreshOverTexts() {
     elFinalNikLine.innerHTML = (lang === "ja")
       ? ('にくまん <span class="num">' + overNik + '</span> こ')
@@ -839,6 +869,7 @@
     overNew = fs > hiscore;
     if (overNew) { hiscore = fs; try{localStorage.setItem(HISCORE_KEY,String(hiscore));}catch(e){} }
     overNik = nikumanCount;
+    overScore = fs;
     elFinal.textContent = fs;
     elHi.innerHTML = digits(hiscore);
     refreshOverTexts();
@@ -870,6 +901,21 @@
   function btnTap(el, fn) { el.addEventListener("pointerdown", (e)=>{ e.preventDefault(); e.stopPropagation(); fn(); }); }
   btnTap(elBtnRestart, restartGame);
   btnTap(elBtnTitle, goToTitle);
+  btnTap(elBtnShare, shareScore);
+
+  // ===== Share score to X (Twitter) =====
+  const SHARE_URL  = "https://1co.github.io/chosu-jump-heaven/";
+  const SHARE_TAGS = "ちょすのジャンプ天国,CHOSUJUMPHEAVEN"; // both tags, every post
+  function shareScore() {
+    if (!overShown) return;
+    const text = (lang === "ja")
+      ? "CHOSU JUMP HEAVEN でスコア " + overScore + "！にくまん " + overNik + "こ集めたよ！"
+      : "Scored " + overScore + " in CHOSU JUMP HEAVEN! Collected " + overNik + " Nikuman!";
+    const url = "https://twitter.com/intent/tweet?text=" + encodeURIComponent(text)
+      + "&url=" + encodeURIComponent(SHARE_URL)
+      + "&hashtags=" + encodeURIComponent(SHARE_TAGS);
+    window.open(url, "_blank", "noopener");
+  }
 
   // render a number as fixed-width digit cells so the HUD doesn't jitter
   function digits(n) {

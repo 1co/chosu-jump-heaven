@@ -3,6 +3,13 @@
   CHOSU JUMP HEAVEN / ちょすのジャンプ天国
   © 2026 1co (ichishiki). All rights reserved. / 無断複製・再配布・転載を禁止します。
   Characters "Chosu/ちょす" and "Nikuman/にくまん" are original works by 1co (ichishiki).
+  Version 1.2.1   (2026-06-14)  - Share button fix + format: the share button is now a real
+                                  <a target="_blank"> whose href is built on game over, so a
+                                  tap navigates directly (mobile/iOS blocked the old
+                                  programmatic window.open even on the bare page). Share text
+                                  is now 3 lines (headline / URL / hashtags), all inside the
+                                  tweet `text` so the line breaks survive; hashtags reordered
+                                  to #CHOSUJUMPHEAVEN #ちょすのジャンプ天国.
   Version 1.2.0   (2026-06-14)  - Expert easter egg: once the score passes 10000, the run
                                   speed stops climbing steadily and instead re-rolls a random
                                   target every 1.5-2.5s within the normal 360-760 range,
@@ -387,6 +394,7 @@
     box-shadow: 0 2px 0 var(--brown);
     cursor: pointer;
     pointer-events: auto;
+    text-decoration: none;   /* it's now an <a> */
   }
   .share-btn:active { transform: translateY(2px); box-shadow: 0 0 0 var(--brown); }
   .key-hint { font-size: clamp(11px, 2.4vw, 14px); color: var(--brown); opacity: .8; font-weight: 500; }
@@ -528,7 +536,7 @@
       <img id="titleChosu" alt="ちょす">
       <img id="titleNikuman" alt="にくまん">
       <div id="langToggle" class="lang" aria-label="language"><button data-lang="ja">JA</button><button data-lang="en">EN</button></div>
-      <div class="version"><span class="v">v</span>1.2.0</div>
+      <div class="version"><span class="v">v</span>1.2.1</div>
       <div class="copyright">© 2026 ICHISHIKI. All rights reserved.</div>
     </div>
 
@@ -545,7 +553,7 @@
         <button class="btn" id="btnRestart"><i class="fa-solid fa-rotate-right"></i> <span data-i18n="retry">もう一度</span></button>
         <button class="btn secondary" id="btnTitle"><i class="fa-solid fa-house"></i> <span data-i18n="titleBtn">タイトル</span></button>
       </div>
-      <button id="btnShare" class="share-btn" aria-label="Share on X" title="Share"><i class="fa-brands fa-x-twitter"></i></button>
+      <a id="btnShare" class="share-btn" target="_blank" rel="noopener" aria-label="Share on X" title="Share"><i class="fa-brands fa-x-twitter"></i></a>
     </div>
 
     <button id="muteBtn" class="mute" aria-label="サウンド切替"><i class="fa-solid fa-volume-high"></i></button>
@@ -694,6 +702,22 @@
   }
   const langBtns = Array.prototype.slice.call(document.querySelectorAll("#langToggle button"));
   // over-panel snapshot so the texts can be rebuilt on language change
+  // ===== Share to X (Twitter) — the share button is a real <a target="_blank">
+  // whose href is rebuilt on game over / language change, so a tap navigates
+  // directly. Mobile/iOS (even on the bare page, not just the itch iframe)
+  // blocks a programmatic window.open from a tap; a genuine link click is fine. =====
+  const SHARE_URL  = "https://1co.github.io/chosu-jump-heaven/";
+  const SHARE_TAGS = "#CHOSUJUMPHEAVEN #ちょすのジャンプ天国"; // both tags, every post
+  function buildShareUrl() {
+    const headline = (lang === "ja")
+      ? "CHOSU JUMP HEAVEN でスコア " + overScore + "！にくまん " + overNik + "こ集めたよ！"
+      : "Scored " + overScore + " in CHOSU JUMP HEAVEN! Collected " + overNik + " Nikuman!";
+    // headline / URL / hashtags on their own lines — keep it all in `text` so the
+    // newlines survive (passing url= / hashtags= separately would re-append them).
+    const body = headline + "\n" + SHARE_URL + "\n" + SHARE_TAGS;
+    return "https://twitter.com/intent/tweet?text=" + encodeURIComponent(body);
+  }
+
   let overNik = 0, overNew = false, overScore = 0;
   function refreshOverTexts() {
     elFinalNikLine.innerHTML = (lang === "ja")
@@ -701,6 +725,7 @@
       : ('Nikuman <span class="num">×' + overNik + '</span>');
     if (overNew) elFinalHi.textContent = (lang === "ja") ? "★ ハイスコアこうしん！ ★" : "★ New High Score! ★";
     else elFinalHi.innerHTML = (lang === "ja" ? "ハイスコア " : "High Score ") + '<span class="num">' + hiscore + '</span>';
+    elBtnShare.href = buildShareUrl();
   }
   function applyLang() {
     const t = I18N[lang];
@@ -980,21 +1005,8 @@
   function btnTap(el, fn) { el.addEventListener("pointerdown", (e)=>{ e.preventDefault(); e.stopPropagation(); fn(); }); }
   btnTap(elBtnRestart, restartGame);
   btnTap(elBtnTitle, goToTitle);
-  btnTap(elBtnShare, shareScore);
-
-  // ===== Share score to X (Twitter) =====
-  const SHARE_URL  = "https://1co.github.io/chosu-jump-heaven/";
-  const SHARE_TAGS = "ちょすのジャンプ天国,CHOSUJUMPHEAVEN"; // both tags, every post
-  function shareScore() {
-    if (!overShown) return;
-    const text = (lang === "ja")
-      ? "CHOSU JUMP HEAVEN でスコア " + overScore + "！にくまん " + overNik + "こ集めたよ！"
-      : "Scored " + overScore + " in CHOSU JUMP HEAVEN! Collected " + overNik + " Nikuman!";
-    const url = "https://twitter.com/intent/tweet?text=" + encodeURIComponent(text)
-      + "&url=" + encodeURIComponent(SHARE_URL)
-      + "&hashtags=" + encodeURIComponent(SHARE_TAGS);
-    window.open(url, "_blank", "noopener");
-  }
+  // #btnShare is a real <a target="_blank"> (no JS click handler): its href is
+  // set in refreshOverTexts() on game over, so the user's tap navigates directly.
 
   // render a number as fixed-width digit cells so the HUD doesn't jitter
   function digits(n) {

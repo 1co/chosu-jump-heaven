@@ -3,6 +3,11 @@
   CHOSU JUMP HEAVEN / ちょすのジャンプ天国
   © 2026 1co (ichishiki). All rights reserved. / 無断複製・再配布・転載を禁止します。
   Characters "Chosu/ちょす" and "Nikuman/にくまん" are original works by 1co (ichishiki).
+  Version 1.2.2   (2026-07-28)  - Game-over button order swapped: "もう一度/Retry" now sits on
+                                  the right and "タイトル/Title" on the left. Most players hold
+                                  the phone one-handed with their right thumb, so the primary
+                                  action (retry) is now in the more reachable spot, next to the
+                                  share button.
   Version 1.2.1   (2026-06-14)  - Share button fix + format: the share button is now a real
                                   <a target="_blank"> whose href is built on game over, so a
                                   tap navigates directly (mobile/iOS blocked the old
@@ -536,7 +541,7 @@
       <img id="titleChosu" alt="ちょす">
       <img id="titleNikuman" alt="にくまん">
       <div id="langToggle" class="lang" aria-label="language"><button data-lang="ja">JA</button><button data-lang="en">EN</button></div>
-      <div class="version"><span class="v">v</span>1.2.1</div>
+      <div class="version"><span class="v">v</span>1.2.2</div>
       <div class="copyright">© 2026 ICHISHIKI. All rights reserved.</div>
     </div>
 
@@ -550,8 +555,8 @@
         <div class="score-line hi" id="finalHi" style="color:#d98a2b;"></div>
       </div>
       <div class="btnrow">
-        <button class="btn" id="btnRestart"><i class="fa-solid fa-rotate-right"></i> <span data-i18n="retry">もう一度</span></button>
         <button class="btn secondary" id="btnTitle"><i class="fa-solid fa-house"></i> <span data-i18n="titleBtn">タイトル</span></button>
+        <button class="btn" id="btnRestart"><i class="fa-solid fa-rotate-right"></i> <span data-i18n="retry">もう一度</span></button>
       </div>
       <a id="btnShare" class="share-btn" target="_blank" rel="noopener" aria-label="Share on X" title="Share"><i class="fa-brands fa-x-twitter"></i></a>
     </div>

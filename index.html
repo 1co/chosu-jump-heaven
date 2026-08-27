@@ -3,6 +3,17 @@
   CHOSU JUMP HEAVEN / ちょすのジャンプ天国
   © 2026 1co (ichishiki). All rights reserved. / 無断複製・再配布・転載を禁止します。
   Characters "Chosu/ちょす" and "Nikuman/にくまん" are original works by 1co (ichishiki).
+  Version 1.2.3   (2026-08-27)  - Random-speed easter egg: no new obstacles spawn while the score
+                                  is within 50 points of the trigger (RANDOM_SPEED_SCORE), on either
+                                  side. Players were reading the sudden speed change as a "flash =
+                                  instant death" moment, because whatever obstacle already happened
+                                  to be in flight would suddenly approach at an unpredictable pace
+                                  right as the flash/banner fired. Clearing the trigger point itself
+                                  (instead of freezing speed or obstacles at the trigger and letting
+                                  both loose again later, which just moves the same cliff a couple
+                                  seconds down the road) means the flash always lands on a clear
+                                  screen, and by the time obstacles resume the player has already
+                                  had a few seconds to feel out the new pace.
   Version 1.2.2   (2026-07-28)  - Game-over button order swapped: "もう一度/Retry" now sits on
                                   the right and "タイトル/Title" on the left. Most players hold
                                   the phone one-handed with their right thumb, so the primary
@@ -541,7 +552,7 @@
       <img id="titleChosu" alt="ちょす">
       <img id="titleNikuman" alt="にくまん">
       <div id="langToggle" class="lang" aria-label="language"><button data-lang="ja">JA</button><button data-lang="en">EN</button></div>
-      <div class="version"><span class="v">v</span>1.2.2</div>
+      <div class="version"><span class="v">v</span>1.2.3</div>
       <div class="copyright">© 2026 ICHISHIKI. All rights reserved.</div>
     </div>
 
@@ -787,6 +798,11 @@
   const RANDOM_SPEED_SCORE = 10000;        // expert-only rare easter egg: speed goes random past this score
   const SPEED_PICK_MIN = 1.5, SPEED_PICK_MAX = 2.5; // seconds between target re-rolls
   const SPEED_LERP = 3;                    // how quickly speed eases toward each new target
+  const RANDOM_SPEED_QUIET_MARGIN = 50;    // no new obstacles spawn while score is within this many
+                                            // points of RANDOM_SPEED_SCORE on either side, so the
+                                            // trigger (flash + speed going random) always lands on a
+                                            // clear screen instead of colliding with whatever obstacle
+                                            // happened to already be in flight
 
   // ground tiles (native 1024x512, surface partway down). Scaled down so more of
   // the texture/pattern shows.
@@ -1082,16 +1098,22 @@
     const frameDur = Math.max(0.06, 0.14 - (speed - SPEED_START*speedScale)*0.0001);
     if (runFrameTimer >= frameDur) { runFrameTimer = 0; runFrame ^= 1; if (chosu.onGround) sfxStep(); }
 
+    const inRandomSpeedQuietZone = Math.abs(score - RANDOM_SPEED_SCORE) <= RANDOM_SPEED_QUIET_MARGIN;
+
     spawnTimer -= dt;
     if (spawnTimer <= 0) {
-      const type = biomeAt(SPAWN_X);
-      const pool = (type===1)?POOL_ROCK.concat(POOL_TREE):POOL_ROCK.concat(POOL_CACTUS);
-      const key = pick(pool), def = OB[key], h = def.h*rand(0.92,1.06), w = obstacleDrawW(key,h);
-      if (zoneClearForObstacle(w)) {
-        obstacles.push({ x: SPAWN_X, key, h, w, def });
-        const minGap = 0.72 + (SPEED_MAX*speedScale - speed)/(SPEED_MAX*speedScale)*0.4;
-        spawnTimer = rand(minGap, minGap+1.1);
-      } else spawnTimer = 0.15;
+      if (inRandomSpeedQuietZone) {
+        spawnTimer = 0.15; // near the random-speed trigger point — keep the screen clear through it
+      } else {
+        const type = biomeAt(SPAWN_X);
+        const pool = (type===1)?POOL_ROCK.concat(POOL_TREE):POOL_ROCK.concat(POOL_CACTUS);
+        const key = pick(pool), def = OB[key], h = def.h*rand(0.92,1.06), w = obstacleDrawW(key,h);
+        if (zoneClearForObstacle(w)) {
+          obstacles.push({ x: SPAWN_X, key, h, w, def });
+          const minGap = 0.72 + (SPEED_MAX*speedScale - speed)/(SPEED_MAX*speedScale)*0.4;
+          spawnTimer = rand(minGap, minGap+1.1);
+        } else spawnTimer = 0.15;
+      }
     }
 
     nikumanTimer -= dt;

@@ -3,6 +3,9 @@
   CHOSU JUMP HEAVEN / ちょすのジャンプ天国
   © 2026 1co (ichishiki). All rights reserved. / 無断複製・再配布・転載を禁止します。
   Characters "Chosu/ちょす" and "Nikuman/にくまん" are original works by 1co (ichishiki).
+  Version 1.6.0   (2026-09-26)  - Add synthesized chiptune BGM during runs, with an ominous
+                                  drone/heartbeat theme while ZANPARN approaches; shorten the
+                                  idle demo notice to the return-to-title hint.
   Version 1.5.0   (2026-09-26)  - Add seaside/snowfield regions and day/night cycles;
                                   refresh biome scenery, terrain and obstacle variety;
                                   replace random speed with varied ZANPARN encounters;
@@ -574,7 +577,7 @@
       <img id="titleChosu" alt="ちょす">
       <img id="titleNikuman" alt="にくまん">
       <div id="langToggle" class="lang" aria-label="language"><button data-lang="ja">JA</button><button data-lang="en">EN</button></div>
-      <div class="version"><span class="v">v</span>1.5.0</div>
+      <div class="version"><span class="v">v</span>1.6.0</div>
       <div class="copyright">© 2026 ICHISHIKI. All rights reserved.</div>
     </div>
 
@@ -679,6 +682,9 @@
     masterGain = audioCtx.createGain();
     masterGain.gain.value = muted ? 0 : 0.5;
     masterGain.connect(audioCtx.destination);
+    bgmGain = audioCtx.createGain();
+    bgmGain.gain.value = 0;
+    bgmGain.connect(masterGain);
   }
   function unlockAudio() {           // must run inside a user gesture
     initAudio();
@@ -710,6 +716,151 @@
   const sfxWarning = () => { tone({ type: "square",   f0: 300, f1: 760,  dur: 0.16, vol: 0.4 });
                           tone({ type: "square",   f0: 480, f1: 1100, dur: 0.18, vol: 0.4, delay: 0.11 });
                           tone({ type: "triangle", f0: 680, f1: 1500, dur: 0.22, vol: 0.45, delay: 0.23 }); };
+
+  // ===== BGM (same synthesis as the SFX; scheduled a little ahead from the frame loop) =====
+  // Plays only during a real run: silent on the title, the game-over screen and the idle demo.
+  // Melody tokens are eighth notes: a note name, "-" holds the previous note, "." is a rest.
+  const BGM_EIGHTH = 0.2;          // 150 bpm
+  const BGM_VOL = 0.55;            // bgm bus level under masterGain, leaves room for the SFX
+  const BGM_SONGS = {
+    // C major, 16 bars (~25.6s): the promo-video theme, a lyrical answer, then a bridge.
+    run: {
+      mel: "C5 E5 G5 E5 C6 G5 E5 G5 | A4 C5 F5 C5 A5 F5 C5 F5 | G4 B4 D5 B4 G5 D5 B4 D5 | C5 E5 G5 C6 B5 G5 A5 B5 |" +
+           "C6 - B5 G5 A5 - G5 E5 | F5 - E5 C5 D5 - C5 A4 | B4 D5 G5 - F5 E5 D5 B4 | C5 - G4 - C5 - - . |" +
+           "A5 - E5 A5 C6 - B5 A5 | F5 - C5 F5 A5 - G5 F5 | G5 - D5 G5 B5 - A5 G5 | E5 G5 C6 G5 E5 C5 D5 E5 |" +
+           "F5 E5 D5 C5 A4 - C5 F5 | G5 F5 E5 D5 B4 - D5 G5 | E5 D5 C5 E5 A5 - G5 E5 | F5 - E5 - D5 - G4 -",
+      bass: "C3 F3 G3 C3 C3 F3 G3 C3 A2 F3 G3 C3 F3 G3 A2 G2",
+      pluck: 0.9, lead: 0.2,
+    },
+    // ZANPARN encounters (same ominous language as the promo video): the tune drops out
+    // under a swelling low drone, a heartbeat and sparse, sinking low notes.
+    zan: {
+      mel: "A3 - - - . . . . | G#3 - - - . . . . | F3 - - - . . . . | E3 - - - D#3 - - -",
+      bass: "A1 A1 A1 A1",
+      eerie: true,
+    },
+  };
+  const NOTE_BASE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  const noteHz = n => 440 * Math.pow(2, (NOTE_BASE[n[0]] + (n[1] === "#" ? 1 : 0) + 12 * (parseInt(n.slice(-1), 10) + 1) - 69) / 12);
+  for (const song of Object.values(BGM_SONGS)) {
+    const tokens = song.mel.replace(/\|/g, " ").trim().split(/\s+/);
+    song.steps = tokens.map((tok, i) => {
+      if (tok === "-" || tok === ".") return null;
+      let len = 1; while (tokens[i + len] === "-") len++;
+      return { f: noteHz(tok), len };
+    });
+    song.roots = song.bass.split(/\s+/).map(noteHz);
+  }
+
+  let bgmGain = null, noiseBuf = null;
+  const bgm = { playing: false, song: "run", step: 0, next: 0, resume: 0 };
+  function bgmVoice(t, type, f0, f1, dur, vol) {
+    const osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(f0, t);
+    if (f1) osc.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(g); g.connect(bgmGain);
+    osc.start(t); osc.stop(t + dur + 0.03);
+  }
+  function bgmNoise(t, dur, vol, filterType, freq) {
+    if (!noiseBuf) {
+      noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const src = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    src.buffer = noiseBuf; f.type = filterType; f.frequency.value = freq;
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f); f.connect(g); g.connect(bgmGain);
+    src.start(t); src.stop(t + dur + 0.02);
+  }
+  let drone = null;
+  function droneStart(t) {
+    bgmNoise(t, 0.5, 0.45, "lowpass", 260);            // the floor drops out
+    bgmVoice(t, "sine", 120, 30, 0.6, 0.8);
+    const lp = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    lp.type = "lowpass"; lp.frequency.setValueAtTime(180, t); lp.frequency.linearRampToValueAtTime(900, t + 3);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.3, t + 1.0);
+    lp.connect(g); g.connect(bgmGain);
+    const oscs = [55, 58.3].map(f => {                  // two detuned saws beat against each other
+      const o = audioCtx.createOscillator(); o.type = "sawtooth";
+      o.frequency.setValueAtTime(f, t); o.frequency.linearRampToValueAtTime(f * 1.5, t + 4);
+      o.connect(lp); o.start(t); return o;
+    });
+    drone = { g, oscs };
+  }
+  function droneStop(t) {
+    if (!drone) return;
+    const { g, oscs } = drone; drone = null;
+    g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(0.3, t);
+    g.gain.linearRampToValueAtTime(0, t + 0.3);
+    for (const o of oscs) o.stop(t + 0.35);
+  }
+  function bgmPlayEerie(t, song, k) {
+    const n = song.steps[k], beat = k % 8;
+    if (n) {                                            // sinking low line + a quiet tritone above
+      bgmVoice(t, "triangle", n.f, n.f * 0.97, BGM_EIGHTH * (n.len - 0.1), 0.45);
+      bgmVoice(t, "sawtooth", n.f * Math.SQRT2, 0, BGM_EIGHTH * (n.len - 0.1), 0.05);
+    }
+    if (beat % 4 === 0) {                               // heartbeat: ba-dum every 0.8s
+      bgmVoice(t, "sine", 90, 40, 0.18, 0.9);
+      bgmVoice(t + 0.16, "sine", 80, 38, 0.16, 0.7);
+    }
+    if (beat === 6 && Math.floor(k / 8) % 2 === 0)     // thin high whine that bends down
+      bgmVoice(t, "sine", 1480, 1240, 0.9, 0.05);
+  }
+  function bgmPlayStep(t) {
+    const song = BGM_SONGS[bgm.song], k = bgm.step % song.steps.length, n = song.steps[k];
+    if (song.eerie) { bgmPlayEerie(t, song, k); return; }
+    if (n) bgmVoice(t, "square", n.f, 0, BGM_EIGHTH * (n.len === 1 ? song.pluck : n.len - 0.1), song.lead);
+    const bar = Math.floor(k / 8), beat = k % 8;
+    if (beat % 2 === 0) {                               // bass: quarters, octave bounce on the offbeat
+      const root = song.roots[bar % song.roots.length];
+      bgmVoice(t, "triangle", root * (beat % 4 === 2 ? 2 : 1), 0, BGM_EIGHTH * 1.8, 0.5);
+    }
+    if (beat % 4 === 0) bgmVoice(t, "sine", 150, 45, 0.14, 0.7);          // kick
+    if (beat === 4) bgmNoise(t, 0.12, 0.22, "bandpass", 1800);             // snare
+    if (beat % 2 === 1) bgmNoise(t, 0.05, 0.1, "highpass", 8000);         // hat
+  }
+  function bgmStart() {
+    if (bgm.playing) return;
+    bgm.playing = true; bgm.song = "run"; bgm.step = 0; bgm.resume = 0;
+    bgm.next = audioCtx.currentTime + 0.06;
+    bgmGain.gain.cancelScheduledValues(audioCtx.currentTime);
+    bgmGain.gain.setValueAtTime(BGM_VOL, audioCtx.currentTime);
+  }
+  function bgmStop() {
+    if (!bgm.playing) return;
+    bgm.playing = false;
+    const now = audioCtx.currentTime;          // fade out what is already scheduled
+    droneStop(now);
+    bgmGain.gain.cancelScheduledValues(now);
+    bgmGain.gain.setValueAtTime(bgmGain.gain.value, now);
+    bgmGain.gain.linearRampToValueAtTime(0, now + 0.12);
+  }
+  function bgmTick() {
+    if (!audioCtx || !bgmGain) return;
+    const wanted = state === STATE.PLAYING && !demoPlaying;
+    if (!wanted) { bgmStop(); return; }
+    bgmStart();
+    const song = (zanPhase === "warning" || zanPhase === "active") ? "zan" : "run";
+    // Never schedule a backlog (e.g. after the tab was suspended): restart just ahead of now.
+    if (bgm.next < audioCtx.currentTime) bgm.next = audioCtx.currentTime + 0.02;
+    while (bgm.next < audioCtx.currentTime + 0.15) {
+      // Switch songs on a beat: enter the encounter theme from its top, and resume the
+      // run theme at the start of the bar it left off.
+      if (song !== bgm.song && bgm.step % 2 === 0) {
+        if (song === "zan") { bgm.resume = bgm.step - bgm.step % 8; bgm.step = 0; if (!muted) droneStart(bgm.next); }
+        else { bgm.step = bgm.resume; droneStop(bgm.next); }
+        bgm.song = song;
+      }
+      if (!muted) bgmPlayStep(bgm.next);
+      bgm.step++; bgm.next += BGM_EIGHTH;
+    }
+  }
 
   function setMuted(m) {
     muted = m;
@@ -1118,8 +1269,8 @@
     startGame(); demoPlaying = true;
     elHud.style.visibility = "hidden";
     elDemoHint.textContent = lang === "ja"
-      ? "自動プレイ・記録されません ／ タップ・キーでタイトルへ"
-      : "Auto play · No records saved · Tap or press a key for title";
+      ? "タップ・キーでタイトルへ"
+      : "Tap or press a key for title";
     elDemo.classList.remove("hidden");
   }
   function endDemo() {
@@ -1137,7 +1288,11 @@
   window.addEventListener("keydown", demoActivity, true);
   window.addEventListener("pointerdown", demoActivity, { capture: true, passive: false });
   window.addEventListener("pointermove", () => { if (state === STATE.READY) titleIdle = 0; });
-  document.addEventListener("visibilitychange", () => { titleIdle = 0; });
+  document.addEventListener("visibilitychange", () => {
+    titleIdle = 0;
+    // pause music (and any tail of SFX) with the hidden tab; the frame loop stops too
+    if (audioCtx) { if (document.hidden) audioCtx.suspend(); else if (bgm.playing || state === STATE.PLAYING) audioCtx.resume(); }
+  });
   function driveDemo() {
     if (!chosu.onGround) return;
     const playerRight = CHOSU_X + CHOSU_W - 16;
@@ -1512,7 +1667,7 @@
     if (!lastTime) lastTime = t;
     let dt = (t-lastTime)/1000; lastTime = t;
     if (dt > 0.05) dt = 0.05;
-    update(dt); render();
+    update(dt); render(); bgmTick();
     requestAnimationFrame(loop);
   }
 

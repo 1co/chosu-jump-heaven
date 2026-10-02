@@ -3,6 +3,8 @@
   CHOSU JUMP HEAVEN / ちょすのジャンプ天国
   © 2026 1co (ichishiki). All rights reserved. / 無断複製・再配布・転載を禁止します。
   Characters "Chosu/ちょす" and "Nikuman/にくまん" are original works by 1co (ichishiki).
+  Version 1.6.3   (2026-10-03)  - Render the canvas at the screen's resolution (2-3x on Retina and
+                                  phones) so ちょす's outlines stay as sharp as on the title screen.
   Version 1.6.2   (2026-09-29)  - Embed large artwork at its drawn size (HTML 12.2MB -> 1.5MB) so
                                   link-card crawlers and slow connections can load the page.
                                   Scatter night stars; on the 686px phone canvas they formed columns.
@@ -182,9 +184,7 @@
     display: block;
     width: 100%;
     height: 100%;
-    touch-action: none;
-    image-rendering: pixelated;
-    image-rendering: crisp-edges;
+    touch-action: none;           /* backing store matches the screen; see configureMode */
   }
 
   /* ---- Overlays ---- */
@@ -581,7 +581,7 @@
       <img id="titleChosu" alt="ちょす">
       <img id="titleNikuman" alt="にくまん">
       <div id="langToggle" class="lang" aria-label="language"><button data-lang="ja">JA</button><button data-lang="en">EN</button></div>
-      <div class="version"><span class="v">v</span>1.6.2</div>
+      <div class="version"><span class="v">v</span>1.6.3</div>
       <div class="copyright">© 2026 ICHISHIKI. All rights reserved.</div>
     </div>
 
@@ -996,17 +996,27 @@
   const BP = 700;
   let mode = null;
   let W = 800, CHOSU_X = 120, SPAWN_X = 860, speedScale = 1;
+  let PX = 1;                 // canvas pixels per game pixel (see configureMode)
 
   function configureMode(force) {
     const m = (window.innerWidth < BP) ? "sp" : "pc";
-    if (m === mode && !force) return;
-    mode = m;
-    W = (m === "sp") ? 686 : 800;
-    canvas.width = W; canvas.height = H;
-    CHOSU_X = Math.round(0.15 * W);
-    SPAWN_X = W + 60;
-    speedScale = W / 800;     // narrower screen -> a touch slower, keeps it fair
-    seedScenery();
+    if (m !== mode || force) {
+      mode = m;
+      W = (m === "sp") ? 686 : 800;
+      CHOSU_X = Math.round(0.15 * W);
+      SPAWN_X = W + 60;
+      speedScale = W / 800;     // narrower screen -> a touch slower, keeps it fair
+      seedScenery();
+    }
+    // Back the canvas at the screen's resolution (a whole multiple, up to 3x) so smooth
+    // sprites like ちょす stay as sharp as the title art on Retina and phone screens.
+    // Game logic stays in W x H units; render() scales by PX. Pixel-art layers draw
+    // without smoothing, so they look the same as before.
+    const need = (canvas.clientWidth || W) * (window.devicePixelRatio || 1) / W;
+    PX = Math.max(1, Math.min(3, Math.ceil(need - 0.05)));
+    if (canvas.width !== W * PX || canvas.height !== H * PX) {
+      canvas.width = W * PX; canvas.height = H * PX;
+    }
   }
 
   // ===== Asset pools / obstacle catalog =====
@@ -1573,9 +1583,10 @@
 
     // Flatten opaque clouds first, then fade the entire layer once. Applying
     // night opacity per sprite makes intersections darker than a single cloud.
-    if (cloudLayer.width !== W || cloudLayer.height !== H) {
-      cloudLayer.width = W; cloudLayer.height = H;
+    if (cloudLayer.width !== W * PX || cloudLayer.height !== H * PX) {
+      cloudLayer.width = W * PX; cloudLayer.height = H * PX;
     }
+    cloudCtx.setTransform(PX, 0, 0, PX, 0, 0);
     cloudCtx.clearRect(0, 0, W, H);
     cloudCtx.globalAlpha = 1;
     for (const c of clouds) {
@@ -1584,7 +1595,7 @@
     }
     ctx.save();
     ctx.globalAlpha = 1 - night * 0.55;
-    ctx.drawImage(cloudLayer, 0, 0);
+    ctx.drawImage(cloudLayer, 0, 0, W, H);
     ctx.restore();
 
     for (const t of groundTiles) drawGround(t);
@@ -1665,6 +1676,8 @@
 
   function render() {
     elHud.classList.toggle("night", nightAmount() > 0.45);
+    ctx.setTransform(PX, 0, 0, PX, 0, 0);
+    ctx.imageSmoothingQuality = "high";   // ちょす is drawn well below its source size
     ctx.clearRect(0,0,W,H);
     drawBackground();
     for (const n of nikumans) drawNikuman(n);
